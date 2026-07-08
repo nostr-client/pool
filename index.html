@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pool — nostr relay pool demo</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, sans-serif; max-width: 42rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
+  h1 { font-size: 1.4rem; } h1 a { text-decoration: none; }
+  code, pre { background: rgba(127,127,127,.12); border-radius: 4px; padding: .1em .3em; }
+  pre { padding: .75em; overflow-x: auto; }
+  #status { font-size: .85rem; opacity: .7; }
+  .note { border: 1px solid rgba(127,127,127,.25); border-radius: 8px; padding: .6rem .8rem; margin: .6rem 0; }
+  .note .meta { font-size: .8rem; opacity: .65; margin-bottom: .25rem; }
+  .note .content { white-space: pre-wrap; overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+<h1><a href="https://github.com/nostr-client/pool">nostr-client / pool</a></h1>
+<p>A zero-dependency, no-build nostr relay pool. This page subscribes to the
+latest <code>kind 1</code> notes, live:</p>
+<pre>import { defaultPool } from 'https://nostr-client.github.io/pool/pool.js'
+
+defaultPool().subscribe([{ kinds: [1], limit: 15 }], {
+  onEvent: (event, relay) =&gt; render(event),
+})</pre>
+<p id="status">connecting…</p>
+<div id="feed"></div>
+
+<script type="module">
+  import { defaultPool } from './pool.js'
+
+  const feed = document.getElementById('feed')
+  const status = document.getElementById('status')
+  let count = 0
+
+  defaultPool().subscribe([{ kinds: [1], limit: 15 }], {
+    onEvent: (event, relay) => {
+      count++
+      status.textContent = `${count} events (deduped across ${defaultPool().urls.length} relays), streaming…`
+      const div = document.createElement('div')
+      div.className = 'note'
+      const meta = document.createElement('div')
+      meta.className = 'meta'
+      meta.textContent = `${event.pubkey.slice(0, 8)}… · ${new Date(event.created_at * 1000).toLocaleString()} · via ${relay}`
+      const content = document.createElement('div')
+      content.className = 'content'
+      content.textContent = event.content.length > 400 ? event.content.slice(0, 400) + '…' : event.content
+      div.append(meta, content)
+      feed.prepend(div)
+      while (feed.children.length > 30) feed.lastChild.remove()
+    },
+    onEose: () => { status.textContent = `caught up — ${count} events, now streaming live` },
+  })
+</script>
+</body>
+</html>
