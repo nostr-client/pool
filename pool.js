@@ -176,6 +176,19 @@ export class Pool {
     const seen = new Set()
     let eosed = 0
     let eoseFired = false
+    let graceTimer = null
+    const fireEose = () => {
+      if (eoseFired) return
+      eoseFired = true
+      clearTimeout(graceTimer)
+      onEose?.()
+    }
+    const oneDone = () => {
+      if (++eosed >= targets.length) fireEose()
+      // don't let one slow/down relay hold everything hostage: once the first
+      // relay finishes, give the rest a short grace period, then move on
+      else if (!graceTimer) graceTimer = setTimeout(fireEose, 2500)
+    }
     for (const relay of targets) {
       relay.subscribe(subId, filters, {
         onEvent: (event) => {
@@ -183,16 +196,12 @@ export class Pool {
           seen.add(event.id)
           onEvent?.(event, relay.url)
         },
-        onEose: () => {
-          if (!eoseFired && ++eosed >= targets.length) { eoseFired = true; onEose?.() }
-        },
-        onClosed: () => {
-          if (!eoseFired && ++eosed >= targets.length) { eoseFired = true; onEose?.() }
-        },
+        onEose: oneDone,
+        onClosed: oneDone,
       })
     }
-    // Fire EOSE even if some relays never answer.
-    setTimeout(() => { if (!eoseFired) { eoseFired = true; onEose?.() } }, 8000)
+    // Fire EOSE even if no relay ever answers.
+    setTimeout(fireEose, 8000)
     return { close: () => targets.forEach((r) => r.unsubscribe(subId)) }
   }
 
